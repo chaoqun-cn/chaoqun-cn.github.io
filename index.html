@@ -8,7 +8,8 @@
     <style>
         * {
             margin: 0;
-            padding: 0
+            padding: 0;
+            box-sizing: content-box;
         }
 
         #splash-screen {
@@ -22,11 +23,50 @@
         }
 
         #content {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
+            width: 100%;
+            height: 100%;
+            /* display: flex;
             justify-content: center;
-            align-items: center;
+            align-items: center; */
+        }
+
+        #content h1 {
+            line-height: 2em;
+            text-align: center;
+            width: 100%;
+            margin-bottom: 32px;
+        }
+
+        .gallery {
+            width: 80%;
+            margin: 0 auto;
+            position: relative;
+            /* grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            grid-gap: 10px;
+            grid-template-rows: masonry; */
+        }
+
+        .gallery #loading {
+            position: absolute;
+            bottom: 0;
+        }
+
+        .gallery img {
+            position: absolute;
+            transition: all .5s;
+            transform: scale(0);
+            opacity: 0;
+        }
+
+        .gallery img.popup {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .gallery img:hover {
+            transform: scale(1.5);
+            cursor: pointer;
+            z-index: 999;
         }
     </style>
 </head>
@@ -47,14 +87,14 @@
             <path id="path2" stroke-dasharray="260" stroke-dashoffset="260"
                 d="M697.33,287.33C672,287.33,661.33,305,659,327c-2.81,26.54,10.33,41.67,29.67,41.67,22,0,34.54-20.78,36.67-40.67,2-18.67-7.39-39.13-28-40.67"
                 transform="translate(-199 -183)" />
-            <animate id="pathAni2" href="#path2" attributeName="stroke-dashoffset" to="0" dur="1s" begin="pathAni1.end"
-                fill="freeze" />
+            <animate id="pathAni2" href="#path2" attributeName="stroke-dashoffset" to="0" dur="500ms"
+                begin="pathAni1.end" fill="freeze" />
 
 
             <path id="path3" stroke-dasharray="100" stroke-dashoffset="100"
                 d="M714.8,295.12c12.11,12.26,43.53,9.55,56.53-5.79" transform="translate(-199 -183)" />
-            <animate id="pathAni3" href="#path3" attributeName="stroke-dashoffset" to="0" dur="1s" begin="pathAni2.end"
-                fill="freeze" />
+            <animate id="pathAni3" href="#path3" attributeName="stroke-dashoffset" to="0" dur="500ms"
+                begin="pathAni2.end" fill="freeze" />
 
             <line id="path4" stroke-width="0" x1="561" y1="181.67" x2="561" y2="181.67" />
             <animate id="dotAni" href="#path4" attributeName="stroke-width" to="18" dur="100ms" begin="pathAni3.end"
@@ -65,6 +105,9 @@
         <h1>
             Welcome to my site in course of construction!
         </h1>
+        <div class="gallery">
+            <div id="loading"></div>
+        </div>
     </div>
 </body>
 <script>
@@ -77,7 +120,6 @@
             '#1d1d1f', '#ff7457', '#99c92b', '#ff8bff',
             '#29d9e5', '#9396ff', '#e192b1', '#8a7a6e',
             '#c0c0e2', '#8511ff', '#04de6e', '#b2b4b6',
-            ''
         ];
         splashScreen.style.setProperty('--color', themeColors[Math.floor(Math.random() * themeColors.length)]);
         pathAni1.beginElement();
@@ -88,12 +130,112 @@
         () => {
             setTimeout(() => {
                 splashScreen.remove();
+                loadMore();
             }, 500)
         },
         {
             once: true
         }
     );
+
+    const gallery = document.querySelector('.gallery');
+    const minImgWidth = 260;
+    const gap = 10;
+
+    function galleryLayoutCal() {
+        const galleryWidth = gallery.clientWidth;
+        let columns = Math.floor(galleryWidth / minImgWidth);
+
+        if (columns * (minImgWidth + gap) - gap > galleryWidth) {
+            columns -= 1;
+        }
+
+        const imgWidth = (galleryWidth - gap * (columns - 1)) / columns;
+
+        return {
+            imgWidth,
+            columns
+        };
+    }
+
+    function doGalleryReflow() {
+        const layoutInfo = galleryLayoutCal();
+        const nextTops = new Array(layoutInfo.columns);
+        nextTops.fill(0);
+
+        for (let i = 0; i < gallery.children.length - 1; i++) {
+            const img = gallery.children[i];
+            img.width = layoutInfo.imgWidth;
+            let minIdx = 0;
+            let minTop = nextTops[minIdx];
+            nextTops.forEach((nextTop, idx) => {
+                if (nextTop < minTop) {
+                    minTop = nextTop;
+                    minIdx = idx;
+                }
+            });
+            nextTops[minIdx] += img.height + gap;
+            const left = minIdx * (layoutInfo.imgWidth + gap);
+
+            img.style.top = minTop + 'px';
+            img.style.left = left + 'px';
+
+            // img.style.transform = "scale(1)";
+            Promise.resolve().then(() => {
+                img.classList.add("popup");
+            })
+        }
+        const maxTop = Math.max.apply(null, nextTops);
+        gallery.style.height = maxTop + 'px';
+
+    }
+
+    const galleryReflow = (function () {
+        let timer = null;
+        return function () {
+            if (timer) {
+                clearTimeout(timer);
+            }
+            setTimeout(() => {
+                doGalleryReflow();
+            }, 300);
+        };
+    })();
+
+    const ob = new IntersectionObserver(
+        (entries) => {
+            for (const entry of entries) {
+                console.log(entry);
+            }
+        },
+        {
+            root: null,
+            rootMargin: '0px',
+            threshold: 0,
+        }
+    );
+    const loading = document.getElementById('loading')
+    function loadMore() {
+        fetch('https://picsum.photos/v2/list?page=2')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data)
+                data.forEach(pic => {
+                    const img = document.createElement('img');
+                    gallery.insertBefore(img, loading);
+                    img.src = pic.download_url;
+                    img.onload = doGalleryReflow;
+
+                })
+            })
+            .catch(err => console.log('Request Failed', err));
+
+
+    }
+    //ob.observe();
+
+
+    window.onresize = galleryReflow;
 
 </script>
 
